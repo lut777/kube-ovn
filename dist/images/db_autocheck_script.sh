@@ -6,7 +6,7 @@
 set -euo pipefail
 
 KUBE_OVN_NS=kube-system
-IS_RESTORE=true
+IS_RESTORE=false
 
 restoreNB(){
   echo "start restore db"
@@ -103,7 +103,7 @@ done
 echo "sb db status check pass"
 
 
-CENTRAL_IPS=$(kubectl get pod -n $KUBE_OVN_NS -o wide | grep ovn-central | awk '{print $6}')
+CENTRAL_IPS=$(kubectl -n kube-system get pods -l app=ovn-central -o=jsonpath='{.items[*].status.podIP}')
 
 match=0
 NBEPS=$(kubectl get ep -n $KUBE_OVN_NS ovn-nb | awk '{print $2}')
