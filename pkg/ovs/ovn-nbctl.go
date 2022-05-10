@@ -1287,8 +1287,11 @@ func (c Client) SetPrivateLogicalSwitch(ls, cidr string, allow []string) error {
 		protocol := util.CheckProtocol(cidrBlock)
 		if protocol == kubeovnv1.ProtocolIPv4 {
 			allowArgs = append(allowArgs, "--", MayExist, "acl-add", ls, "to-lport", util.SubnetAllowPriority, fmt.Sprintf(`ip4.src==%s && ip4.dst==%s`, cidrBlock, cidrBlock), "allow-related")
-		} else {
+		} else if protocol == kubeovnv1.ProtocolIPv6 {
 			allowArgs = append(allowArgs, "--", MayExist, "acl-add", ls, "to-lport", util.SubnetAllowPriority, fmt.Sprintf(`ip6.src==%s && ip6.dst==%s`, cidrBlock, cidrBlock), "allow-related")
+		} else {
+			klog.Errorf("the cidrBlock: %s format is error in subnet: %s", cidrBlock, ls)
+			continue
 		}
 
 		for _, nodeCidrBlock := range strings.Split(c.NodeSwitchCIDR, ",") {
@@ -1298,7 +1301,7 @@ func (c Client) SetPrivateLogicalSwitch(ls, cidr string, allow []string) error {
 
 			if protocol == kubeovnv1.ProtocolIPv4 {
 				allowArgs = append(allowArgs, "--", MayExist, "acl-add", ls, "to-lport", util.NodeAllowPriority, fmt.Sprintf("ip4.src==%s", nodeCidrBlock), "allow-related")
-			} else {
+			} else if protocol == kubeovnv1.ProtocolIPv6 {
 				allowArgs = append(allowArgs, "--", MayExist, "acl-add", ls, "to-lport", util.NodeAllowPriority, fmt.Sprintf("ip6.src==%s", nodeCidrBlock), "allow-related")
 			}
 		}
@@ -2113,9 +2116,19 @@ func (c Client) OvnGet(table, record, column, key string) (string, error) {
 	return c.ovnNbCommand(args...)
 }
 
-func (c Client) SetLspExternalIds(cmd []string) error {
+func (c Client) SetLspExternalIds(name string, externalIDs map[string]string) error {
+	if len(externalIDs) == 0 {
+		return nil
+	}
+
+	cmd := make([]string, len(externalIDs)+3)
+	cmd = append(cmd, "set", "logical_switch_port", name)
+	for k, v := range externalIDs {
+		cmd = append(cmd, fmt.Sprintf(`external-ids:%s="%s"`, k, v))
+	}
+
 	if _, err := c.ovnNbCommand(cmd...); err != nil {
-		return fmt.Errorf("failed to set lsp externalIds, %v", err)
+		return fmt.Errorf("failed to set external-ids for logical switch port %s: %v", name, err)
 	}
 	return nil
 }
